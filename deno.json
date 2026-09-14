@@ -1,0 +1,36 @@
+{
+  "name": "deno-solidjs-template",
+  "version": "0.1.0",
+  "exports": "./server.js",
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@solidjs/web",
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"]
+  },
+  "imports": {
+    "@orpc/contract": "npm:@orpc/contract@2.0.0-beta.35",
+    "@orpc/server": "npm:@orpc/server@2.0.0-beta.35",
+    "@solidjs/meta": "npm:@solidjs/meta@^1.0.0-next.2",
+    "@solidjs/router": "npm:@solidjs/router@^2.0.0-next.21",
+    "@solidjs/vite-plugin": "npm:@solidjs/vite-plugin@^3.0.0-next.38",
+    "@solidjs/web": "npm:@solidjs/web@^2.0.0-rc.6",
+    "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.3.3",
+    "filesystem-routing": "npm:filesystem-routing@0.2.1",
+    "solid-js": "npm:solid-js@^2.0.0-rc.6",
+    "tailwindcss": "npm:tailwindcss@^4.3.3",
+    "vite": "npm:vite@^8.1.5",
+    "zod": "npm:zod@^4.6.1"
+  },
+  "tasks": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "deno run --allow-net --allow-read --allow-env server.js",
+    "serve": "vite preview",
+    "check": "deno check src",
+    "lint": "deno lint src"
+  }
+}
