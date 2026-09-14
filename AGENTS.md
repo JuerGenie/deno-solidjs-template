@@ -82,6 +82,7 @@ skill = follow its Apply steps, run its Verify commands, then append a line to
 | `skills/project-hygiene/SKILL.md`  | Adding formatting gates / a single `deno task verify`.                                |
 | `skills/testing/SKILL.md`          | Adding Vitest infrastructure or writing tests.                                        |
 | `skills/typed-env/SKILL.md`        | Needing env vars (typed, validated, leak-protected).                                  |
+| `skills/deno-desktop/SKILL.md`     | Packaging the app as a desktop binary with `deno desktop`.                            |
 | `skills/ci/SKILL.md`               | Adding GitHub Actions CI (requires hygiene + testing).                                |
 
 Composition rules and the apply protocol live in `skills/README.md`.

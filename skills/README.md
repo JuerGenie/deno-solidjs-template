@@ -13,6 +13,7 @@
 | [`project-hygiene`](./project-hygiene/SKILL.md)   | 格式化/lint 门禁 + `deno task verify` 一键闭环            | 需要统一格式、加验证命令时 | 无                                |
 | [`testing`](./testing/SKILL.md)                   | Vitest 双 project（client jsdom / server node）+ 示例测试 | 需要测试基建、写测试时     | 建议先装 project-hygiene          |
 | [`typed-env`](./typed-env/SKILL.md)               | 类型化环境变量（`env.ts` + `virtual:env/*`）              | 需要环境变量校验/类型时    | 无                                |
+| [`deno-desktop`](./deno-desktop/SKILL.md)         | 用 `deno desktop` 打包桌面应用（Deno.serve 入口 + 配置）  | 需要桌面分发形态时         | 无（需 Deno ≥ 2.9）               |
 | [`ci`](./ci/SKILL.md)                             | GitHub Actions：install + verify + test + build           | 需要 CI 时                 | 硬前置：project-hygiene + testing |
 
 ## 组合关系
