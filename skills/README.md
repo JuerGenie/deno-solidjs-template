@@ -13,7 +13,7 @@
 | [`project-hygiene`](./project-hygiene/SKILL.md)   | 格式化/lint 门禁 + `deno task verify` 一键闭环            | 需要统一格式、加验证命令时 | 无                                |
 | [`testing`](./testing/SKILL.md)                   | Vitest 双 project（client jsdom / server node）+ 示例测试 | 需要测试基建、写测试时     | 建议先装 project-hygiene          |
 | [`typed-env`](./typed-env/SKILL.md)               | 类型化环境变量（`env.ts` + `virtual:env/*`）              | 需要环境变量校验/类型时    | 无                                |
-| [`deno-desktop`](./deno-desktop/SKILL.md)         | 用 `deno desktop` 打包桌面应用（Deno.serve 入口 + 配置）  | 需要桌面分发形态时         | 无（需 Deno ≥ 2.9）               |
+| [`deno-desktop`](./deno-desktop/SKILL.md)         | 桌面开发模式**技能集**：统一 `start.ts` 宿主 + `packaging`/`printing` 子文件 | 开发或打包桌面形态时       | 无（需 Deno ≥ 2.9）               |
 | [`ci`](./ci/SKILL.md)                             | GitHub Actions：install + verify + test + build           | 需要 CI 时                 | 硬前置：project-hygiene + testing |
 
 ## 组合关系
@@ -28,6 +28,8 @@ flowchart LR
   HY --> CI["ci"]
   TEST --> CI
   BASE --> ENV["typed-env"]
+  BASE --> DT["deno-desktop<br/>（技能集入口）"]
+  DT -.按需.-> DTSUB["packaging.md / printing.md<br/>同目录子文件"]
 ```
 
 可自由组合；`ci` 的 workflow 引用 `verify`（hygiene）与
@@ -72,3 +74,9 @@ description: Use when ...     # 英文，前挂触发关键词；说明做什么
 正文固定结构：`何时使用 → 前置检查（sentinel）→ Apply 步骤（精确代码块）→ Verify 命令 → 组合注意 → 回滚`。
 技能内所有依赖版本以模板 `deno.json` 为准；涉及 beta/RC
 库时在技能里注明版本漂移风险。
+
+**技能集（复杂技能拆分）**：内容较多时在同一目录下拆子文件，只有入口
+`SKILL.md` 带 frontmatter（技能索引只登记入口），子文件（如
+`skills/deno-desktop/packaging.md`）从入口用相对链接引用、**按需加载**。
+子文件沿用同样的章节结构（可省略 frontmatter 与 sentinel 之外的细节），
+能力登记仍只记入口那一行。

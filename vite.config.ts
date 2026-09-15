@@ -22,7 +22,12 @@ export default defineConfig({
     }),
     // Scans src/routes: pages feed the router (src/router.ts), GET/POST/...
     // exports become API routes served by the middleware above.
-    fileRoutes({ httpMethods: true, types: true }),
+    // Eager refs (no `lazy()`): the dev asset resolver is async, and lazy
+    // routes suspend through Solid's asset-manifest guard — with code
+    // splitting on, `deno task dev` fails to SSR every page ("no asset
+    // manifest is set"). Page modules are tiny, so one client chunk is cheaper
+    // than the dev breakage; heavy client-only deps still split lazily.
+    fileRoutes({ httpMethods: true, types: true, codeSplitting: false }),
     tailwindcss(),
   ],
   server: {

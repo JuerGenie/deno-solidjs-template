@@ -1,129 +1,340 @@
 ---
 name: deno-desktop
-description: Use when packaging this Deno + Solid app as a desktop application with `deno desktop` — adding the Deno.serve desktop entry, configuring desktop.app/output/backend in deno.json, building .app/.dmg/.msi/.AppImage artifacts, or cross-compiling for other platforms. Triggers include deno desktop, desktop app, DMG, AppImage, MSI, webview, CEF, BrowserWindow.
+description: Use when developing this Deno + Solid app as a desktop application with `deno desktop` — unifying browser dev / desktop dev / production behind one `start.ts` host, running the desktop shell against the Vite dev server, window menu/close/quit/geometry behaviour, permissions and app-data placement. Packaging lives in `packaging.md`, printing in `printing.md` inside this skill folder. Triggers include deno desktop, desktop app, start.ts, BrowserWindow, desktop dev, DENO_SERVE_ADDRESS, CEF backend.
 ---
 
-# Deno Desktop：把 SSR 应用打包成桌面应用
+# Deno Desktop：桌面开发模式（技能集入口）
 
-用 `deno desktop`（Deno 2.9+）把本模板编译成自包含桌面应用：二进制内嵌
-Deno、你的代码、 构建产物与渲染后端，运行后起一个本地 HTTP 服务，系统 webview
-指向它。
+用 `deno desktop`（Deno 2.9+）把本模板变成自包含桌面应用。核心主张是**收敛宿主**：
+浏览器 dev / 桌面 dev / 生产（浏览器与桌面）四种形态都走同一个 `start.ts`，不再维护
+「`server.js` 生产宿主 + `desktop.ts` 桌面入口」两套代码。
+
+这是一个**技能集**：本文件是入口（含 frontmatter、核心 Apply 与 Verify），
+子文件放在同一目录、按需加载——只读当前任务需要的那一个。
+
+| 文件                             | 何时读                                             |
+| -------------------------------- | -------------------------------------------------- |
+| [`packaging.md`](./packaging.md) | 要 `prod:desktop*` 打包、跨平台构建、图标/签名/更新 |
+| [`printing.md`](./printing.md)   | 要用 Chromium（CEF）打印 PDF / 标签                |
 
 ## 何时使用
 
-- 需要分发桌面形态（macOS `.app`/`.dmg`、Windows `.msi`、Linux
-  `.AppImage`/`.deb`）。
-- 需要窗口/菜单/托盘/通知/自动更新等原生能力。
+- 需要桌面分发形态（macOS `.app`/`.dmg`、Windows `.msi`、Linux `.AppImage`/`.deb`）。
+- 需要窗口/菜单/通知等原生能力。
+- 需要"内嵌 webview 跑 Vite dev server"的开发循环（客户端 HMR，而不是只重载 Deno 侧）。
+
+## 模式矩阵（先读）
+
+| 模式       | 命令                       | 宿主                    | 页面资源                                        |
+| ---------- | -------------------------- | ----------------------- | ----------------------------------------------- |
+| 浏览器 dev | `deno task dev`            | `start.ts --dev`        | Vite dev server（`import("vite")` 程序内启动）   |
+| 桌面 dev   | `deno task dev:desktop`    | `start.ts`（env 标记）  | Vite dev server 直接绑到桌面运行时分配的端口     |
+| 浏览器生产 | `deno task start`          | `start.ts`              | `dist/client` 静态 + `dist/server` handleRequest |
+| 桌面生产   | `deno task prod:desktop*`  | `start.ts`              | 同上，产物内嵌进二进制（见 packaging 子技能）    |
 
 ## 原理（决定写法，先读）
 
-- `deno desktop` 运行时分配一个本地端口，写入
-  `DENO_SERVE_ADDRESS`（`tcp:127.0.0.1:<port>`）； **`Deno.serve()`
-  会读取它并绑定，忽略你传入的端口**；webview 导航到该地址。
-- 因此桌面入口**必须使用 `Deno.serve`**。本模板的 `server.js` 是 `node:http`
-  宿主 （面向通用/Node 部署），不会被桌面运行时接管——所以需要单独的 `desktop.ts`
-  入口； SSR、server functions、`/api/rpc` 全部复用构建产物的
-  `handleRequest`，行为与生产一致。
-- 绑定地址恒为
-  `127.0.0.1`，不暴露公网；与本机浏览器行为一致，可先在浏览器里开发。
-- 编译后进程的 cwd 是用户的 cwd：**不要**用 `Deno.cwd()` 定位资源，用
-  `import.meta.url`。
-- 非框架入口需 `--include dist`
-  把构建产物嵌进二进制（框架自动探测项目才自动内嵌）。
+- `deno desktop` 运行时分配一个本地端口写入 `DENO_SERVE_ADDRESS`
+  （`tcp:127.0.0.1:<port>`）；**`Deno.serve()` 会读取它并绑定，忽略你传入的端口**，
+  webview 导航到该地址。所以桌面入口**必须用 `Deno.serve`**——`server.js` 的
+  `node:http` 宿主不会被接管。
+- 绑定地址恒为 `127.0.0.1`；编译后进程的 cwd 是用户的 cwd，**不要用
+  `Deno.cwd()` 定位资源**，用 `import.meta.url`。
+- 非框架入口要 `--include dist` 把构建产物嵌进二进制（动态 import 的
+  `dist/server/server.js` 也因此可达）。
+- **就绪探针**：运行时启动后会不断轮询地址（不带 `Accept` 头的 `GET /`），成功才导航；
+  Vite 的 HTML 回退只认 `Accept: text/html`，对探针返回 404 —— 不处理就会白等
+  15 秒（日志 `Server not ready after 15s, navigating anyway`）。dev 中间件先应答它。
+- **laufey 没有宿主侧屏幕 API**：窗口居中要 `executeJs` 读 webview 的
+  `screen.avail*`（打印另见 printing 子技能）。
+- Deno desktop 的运行时 API（`BrowserWindow`、`MenuItem`）**不在标准 deno types
+  里**，在 start.ts 里自行声明最小类型。
+- GUI 模式下关闭窗口不会结束进程（`Deno.serve` 让事件循环活着），必须自己
+  `Deno.exit(0)`；没有应用菜单就没有 Cmd+Q / Cmd+W / 剪贴板快捷键。
 
 ## 前置检查（sentinel）
 
-根目录已有 `desktop.ts` 且 `deno.json` 的 tasks 里有 `desktop` → 已安装，跳过
-Apply。 另确认：`deno --version` ≥ 2.9；`deno task build` 能产出 `dist/`（首次
-`deno desktop` 会下载渲染后端，webview 较小、CEF 约数百 MB，需要网络）。
+根目录已有 `start.ts` 且 `deno.json` 的 tasks 里有 `dev:desktop` → 已安装，跳过
+Apply，只跑 Verify。另确认 `deno --version` ≥ 2.9、`deno task build` 能产出
+`dist/`（首次 `deno desktop` 会下载对应平台渲染后端，需网络）。
 
 ## Apply
 
-### 1. desktop.ts（仓库根，新入口）
+### 1. start.ts（仓库根，统一宿主）
 
 ```ts
-// Desktop entry for `deno desktop desktop.ts --include dist`.
-// `deno desktop` allocates a local port, sets DENO_SERVE_ADDRESS, and points
-// the embedded webview at it; Deno.serve() binds to that address (port args
-// are ignored in desktop mode). Everything else — SSR pages, server
-// functions, /api/rpc — goes through the same built handleRequest as
-// production. server.js (node:http) is the generic host and is not used here.
-import { handleRequest } from "./dist/server/server.js";
+// Unified host — every mode serves through this file:
+//
+//   browser dev   deno run -A start.ts --dev
+//                 starts Vite programmatically (HMR + SSR).
+//   desktop dev   DESKTOP_DEV=1 deno desktop start.ts ...
+//                 Vite takes the port the desktop runtime allocated
+//                 (DENO_SERVE_ADDRESS) so the embedded webview gets HMR.
+//   production    deno run ... start.ts  /  deno desktop start.ts ...
+//                 serves dist/client statics plus the built dist/server
+//                 handleRequest.
+import { serveDir } from "@std/http/file-server";
+import { fileURLToPath } from "node:url";
 
-const clientDir = new URL("./dist/client/", import.meta.url);
+const APP_NAME = "Deno Solid App"; // 改成你的应用名
+const IS_DEV = Deno.args.includes("--dev") ||
+  Deno.env.get("DESKTOP_DEV") === "1";
 
-const MIME: Record<string, string> = {
-  ".css": "text/css",
-  ".html": "text/html",
-  ".ico": "image/x-icon",
-  ".js": "application/javascript",
-  ".mjs": "application/javascript",
-  ".json": "application/json",
-  ".map": "application/json",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".woff2": "font/woff2",
-};
+const BUILT_SERVER = "./dist/server/server.js";
+const CLIENT_DIR = fileURLToPath(new URL("./dist/client/", import.meta.url));
+const WINDOW_SIZE = { width: 1280, height: 800 };
+const WINDOW_MIN_SIZE = { width: 960, height: 640 };
 
-async function serveStatic(pathname: string): Promise<Response | undefined> {
-  if (pathname.includes("..")) return undefined;
-  try {
-    const body = await Deno.readFile(new URL(`.${pathname}`, clientDir));
-    const ext = pathname.slice(pathname.lastIndexOf(".")).toLowerCase();
-    return new Response(body, {
-      headers: { "content-type": MIME[ext] ?? "application/octet-stream" },
-    });
-  } catch {
-    return undefined; // Not a built asset: fall through to the app handler.
+interface RequestHandler {
+  (
+    request: Request,
+    options?: { event?: { nativeEvent?: unknown } },
+  ): Promise<Response>;
+}
+
+// --- `deno desktop` runtime APIs (not in the standard Deno types) ------------
+type MenuEntry =
+  | {
+    item: {
+      label: string;
+      id?: string;
+      accelerator?: string;
+      enabled: boolean;
+    };
+  }
+  | { submenu: { label: string; items: MenuEntry[] } }
+  | { role: { role: string } }
+  | "separator";
+
+interface ScreenBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface DesktopWindow {
+  getSize(): [number, number];
+  setSize(width: number, height: number): void;
+  setPosition(x: number, y: number): void;
+  executeJs(code: string): Promise<{ value?: ScreenBounds }>;
+  setApplicationMenu(items: MenuEntry[]): void;
+  addEventListener(type: "close" | "resize", listener: () => void): void;
+}
+
+interface DesktopDeno {
+  BrowserWindow?: new (
+    options?: { title?: string; width?: number; height?: number },
+  ) => DesktopWindow;
+}
+
+// Roles give the platform-native label, accelerator and behavior; the first
+// submenu becomes the macOS application menu. Without this the window has no
+// Cmd+Q / Cmd+W handling (and the Edit roles provide clipboard shortcuts).
+const APPLICATION_MENU: MenuEntry[] = [
+  {
+    submenu: { label: APP_NAME, items: [{ role: { role: "quit" } }] },
+  },
+  {
+    submenu: {
+      label: "Edit",
+      items: [
+        { role: { role: "undo" } },
+        { role: { role: "redo" } },
+        "separator",
+        { role: { role: "cut" } },
+        { role: { role: "copy" } },
+        { role: { role: "paste" } },
+        { role: { role: "selectAll" } },
+      ],
+    },
+  },
+  {
+    submenu: {
+      label: "Window",
+      items: [
+        { role: { role: "minimize" } },
+        { role: { role: "close" } },
+      ],
+    },
+  },
+];
+
+// There is no minimum-size option, so a size below the floor is snapped back
+// on every resize (the follow-up setSize settles immediately).
+function clampToMinSize(window: DesktopWindow): void {
+  const [width, height] = window.getSize();
+  const clampedWidth = Math.max(width, WINDOW_MIN_SIZE.width);
+  const clampedHeight = Math.max(height, WINDOW_MIN_SIZE.height);
+  if (clampedWidth !== width || clampedHeight !== height) {
+    window.setSize(clampedWidth, clampedHeight);
   }
 }
 
-const port = Number(Deno.env.get("PORT") ?? 3000);
-
-Deno.serve({ port, hostname: "127.0.0.1" }, async (request) => {
-  const url = new URL(request.url);
-  if (request.method === "GET") {
-    const asset = await serveStatic(url.pathname);
-    if (asset) return asset;
+// Centering needs the renderer's screen work area (no host-side screen API),
+// and the webview is not ready right away — retry until executeJs answers.
+async function centerWindow(window: DesktopWindow, attempt = 0): Promise<void> {
+  try {
+    const result = await window.executeJs(
+      "({ x: screen.availLeft, y: screen.availTop, width: screen.availWidth, height: screen.availHeight })",
+    );
+    const bounds = result?.value;
+    if (!bounds) throw new Error("no screen bounds");
+    const [width, height] = window.getSize();
+    window.setPosition(
+      Math.round(bounds.x + (bounds.width - width) / 2),
+      Math.round(bounds.y + (bounds.height - height) / 2),
+    );
+  } catch {
+    if (attempt < 40) {
+      setTimeout(() => void centerWindow(window, attempt + 1), 250);
+    }
   }
-  return await handleRequest(request);
-});
+}
+
+// The first BrowserWindow constructed adopts the startup window. Closing it
+// does not stop the runtime while Deno.serve is alive, so exit explicitly —
+// that is what makes the traffic light, Cmd+W and Cmd+Q actually quit.
+function setupDesktopWindow(): void {
+  const api = Deno as unknown as DesktopDeno;
+  if (typeof api.BrowserWindow !== "function") return;
+  const window = new api.BrowserWindow({ title: APP_NAME, ...WINDOW_SIZE });
+  window.setApplicationMenu(APPLICATION_MENU);
+  window.addEventListener("resize", () => clampToMinSize(window));
+  window.addEventListener("close", () => {
+    Deno.exit(0);
+  });
+  void centerWindow(window);
+}
+
+// The desktop runtime writes `tcp:127.0.0.1:<port>` for the webview to load.
+function desktopPort(): number | undefined {
+  const address = Deno.env.get("DENO_SERVE_ADDRESS");
+  const port = address?.match(/:(\d+)$/)?.[1];
+  return port ? Number(port) : undefined;
+}
+
+async function startDevServer(): Promise<void> {
+  const { createServer } = await import("vite");
+  const allocated = desktopPort();
+  // In desktop mode the webview is already pointed at the allocated address,
+  // so silently hopping to another port would strand it.
+  const server = await createServer({
+    plugins: [
+      {
+        name: "dev-readiness",
+        // The desktop runtime polls `GET /` with no Accept header until the
+        // address answers; Vite's HTML fallback ignores those (404), which
+        // parks the webview for its full 15s probe budget. Answer the probe
+        // before internal middlewares.
+        configureServer(devServer) {
+          devServer.middlewares.use((request, response, next) => {
+            if (
+              request.method === "GET" && request.url === "/" &&
+              !request.headers.accept
+            ) {
+              response.statusCode = 200;
+              response.setHeader("content-type", "text/plain; charset=utf-8");
+              response.end(
+                "dev server is running. Request with `Accept: text/html` for the app.\n",
+              );
+              return;
+            }
+            next();
+          });
+        },
+      },
+    ],
+    server: {
+      port: allocated ?? Number(Deno.env.get("PORT") ?? 3000),
+      strictPort: allocated !== undefined,
+      host: "127.0.0.1",
+    },
+  });
+  // Document requests only — the quickest way to confirm the embedded webview
+  // actually reached the dev server.
+  server.httpServer?.on("request", (request) => {
+    if (request.headers.accept?.includes("text/html")) {
+      console.log(`[dev] ${request.method ?? "GET"} ${request.url ?? "/"}`);
+    }
+  });
+  await server.listen();
+  server.printUrls();
+}
+
+async function startProductionServer(): Promise<void> {
+  const { handleRequest } = (await import(BUILT_SERVER)) as {
+    handleRequest: RequestHandler;
+  };
+  const port = desktopPort() ?? Number(Deno.env.get("PORT") ?? 3000);
+  const hostname = Deno.env.get("HOST") ?? "127.0.0.1";
+
+  Deno.serve({ port, hostname }, async (request, info) => {
+    if (request.method === "GET" || request.method === "HEAD") {
+      // Built assets live in dist/client; anything not found there (app
+      // routes, /_server, /api/rpc) falls through to the SSR handler.
+      const asset = await serveDir(request, {
+        fsRoot: CLIENT_DIR,
+        quiet: true,
+      });
+      if (asset.status !== 404) return asset;
+    }
+    return await handleRequest(request, { event: { nativeEvent: info } });
+  });
+}
+
+if (desktopPort() !== undefined) {
+  setupDesktopWindow();
+}
+
+if (IS_DEV) {
+  await startDevServer();
+} else {
+  await startProductionServer();
+}
 ```
 
-说明：`deno desktop` 会按需忽略这里的 `port`/`hostname`；`deno run`
-直接跑时用它们（便于本地验证）。
+要点：
 
-### 2. deno.json：desktop 配置与任务
+- `import(BUILT_SERVER)` 用**变量说明符**：dev 模式没有 `dist/` 也不会挂，
+  生产/桌面靠 `--include dist` 内嵌可达。
+- 静态资源交给 `@std/http/file-server` 的 `serveDir`，**只处理 404 之外的响应**，
+  其余落到 `handleRequest`（不要把 `dist/client` 的 404 当成应用 404）。
+- 四种形态同用一个入口：server functions、`/api/rpc`、SSR 都复用构建产物的
+  `handleRequest`，行为与生产一致。
+
+### 2. deno.json（配置、任务、权限）
 
 ```jsonc
 {
   "desktop": {
     "app": {
       "name": "Deno Solid App",
-      // 反向 DNS，macOS 通知授权等需要稳定值；不写会生成合成 id
+      // 反向 DNS，系统通知/签名需要稳定值；不写会生成合成 id
       "identifier": "com.example.deno-solid-app"
     },
-    // 默认 webview（系统 webview，体积小）；要跨平台渲染一致改 "cef"（大很多）
-    "backend": "webview",
-    "output": {
-      "macos": "./dist-desktop/DenoSolid.app",
-      "windows": "./dist-desktop/DenoSolid",
-      "linux": "./dist-desktop/deno-solid"
-    }
+    // 渲染后端：webview 体积小（系统内核）；cef 跨平台一致 + 可打印，
+    // 体积大数百 MB，详见 packaging.md / printing.md（同一技能目录）
+    "backend": "webview"
+  },
+  "imports": {
+    // 静态资源托管用官方实现，不要手写 MIME 表
+    "@std/http": "jsr:@std/http@^1"
   },
   "tasks": {
-    "desktop": "deno task build && deno desktop desktop.ts --include dist --allow-net --allow-read --allow-env --exclude-unused-npm"
+    "dev": "deno run -A start.ts --dev",
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys start.ts",
+    "dev:desktop": "DESKTOP_DEV=1 deno desktop -A --hmr --exclude-unused-npm start.ts"
   }
 }
 ```
 
-- `--exclude-unused-npm`：只嵌入模块图可达的 npm
-  包，显著减小体积；若运行时报模块缺失就去掉它。
-- 首次构建产物命名以实际输出为准：官方语法是带扩展名（`MyApp.app`）；若在部分
-  Deno 2.9.x 上出现 `X.app.app`，把 `output.*` 改成不带扩展名的基名（如
-  `./dist-desktop/DenoSolid`）。
-- 产物按平台扩展名决定格式：macOS `.app` / `.dmg`；Windows 目录（含 `.bat`
-  启动器）/ `.msi`； Linux 目录 / `.AppImage` / `.deb` / `.rpm`。
+- **`--allow-sys`**：`node:process` 的部分 API（如 `process.umask`）需要它；服务端
+  依赖里只要有 exceljs 这类 Node 生态包，导入期就可能触发。`--allow-write` 给用户
+  数据目录。dev 任务直接用 `-A` 省心。
+- `check` / `lint` 记得带上 `start.ts`（模板默认只覆盖 `src`）：
+  `"check": "deno check src start.ts"`、`"lint": "deno lint src start.ts"`。
+- `prod:desktop*` 任务由 packaging 子技能追加。
 
 ### 3. .gitignore
 
@@ -132,59 +343,85 @@ Deno.serve({ port, hostname: "127.0.0.1" }, async (request) => {
 dist-desktop
 ```
 
+### 4. 替换旧宿主与文档引用
+
+`start.ts` 上线后 `server.js`（`node:http` 生产宿主）与 `desktop.ts` 都不再需要：
+
+- 删除 `server.js` / `desktop.ts`，把 `deno.json` 的 `exports` 指向 `start.ts`；
+- 同步更新文档里"宿主是谁"的表述（`AGENTS.md`、`README.md`、
+  `docs/architecture.md`、`docs/development.md` 以及其它技能里出现 `server.js`
+  的地方，全部改指 `start.ts`）；
+- 需要 Node 部署时再单独写一个 `node:http` 适配层——`handleRequest` 本身是
+  平台无关的。
+
+## 窗口与原生能力（要点）
+
+- **认领启动窗口**：第一次 `new Deno.BrowserWindow()` 认领运行时创建的窗口，
+  之后再构造才是新窗口。
+- **菜单 → 快捷键**：`setApplicationMenu` 用 `role` 项拿系统原生标签与快捷键
+  （`quit`/`close`/`minimize`/`undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`）；
+  macOS 第一个 submenu 是应用菜单。
+- **尺寸/居中/最小尺寸**：构造参数只有 `width/height/x/y`，没有 `center`/`minWidth`；
+  居中读 `screen.avail*` 再 `setPosition`（`executeJs` 返回 `{ ok, value }` 信封），
+  最小尺寸靠 `resize` 事件里 clamp。
+- **退出**：`close` 事件里 `Deno.exit(0)`，否则窗口关了进程还在。
+- **数据目录**：打包后的 `.app` 内部是只读的，用户数据（上传的 PDF/表格等）放应用
+  数据目录（macOS `~/Library/Application Support/<App>/`），并提供
+  `APP_DATA_DIR` 之类的环境变量覆盖，便于测试与迁移；写文件靠 `--allow-write`。
+- 打印能力见 [`printing.md`](./printing.md)。
+
 ## Verify
 
-先验证入口逻辑（不打包，走普通 HTTP）：
+先验证宿主本身（不打包，走普通 HTTP）：
 
 ```sh
 deno task build
-PORT=3106 deno run --allow-net --allow-read --allow-env desktop.ts &
+PORT=3106 deno run --allow-net --allow-read --allow-write --allow-env --allow-sys start.ts &
 curl -s localhost:3106/ | head -c 200
 curl -s localhost:3106/posts | grep -o "<h1[^>]*>Posts"
 curl -s -o /dev/null -w "%{http_code}\n" localhost:3106/nope        # 404
 curl -s -X POST localhost:3106/api/rpc/greet \
   -H 'content-type: application/json' -d '{"json":{"name":"world"}}'
+curl -s -H 'Accept:' localhost:3106/ | head -c 40                   # 探针应答
 kill %1
 ```
 
-再打包并人工验收：
+再验证 dev 模式（**必须带 `Accept: text/html`**，否则拿到的是 Vite 的 404）：
 
 ```sh
-deno task desktop
-open dist-desktop/DenoSolid.app   # macOS；Windows/Linux 运行对应产物
+deno task dev &
+sleep 8
+curl -s -H 'Accept: text/html' localhost:3000/ | grep -c "<h1"
+kill %1
 ```
 
-窗口打开后：首页 greet 表单应走 server function、`/posts` 应渲染数据、导航正常。
-失败时排查顺序：入口是否 `Deno.serve` → `--include dist` 是否传了 → `dist/`
-是否最新构建。
+桌面形态验收（打包 + 启动 + 分配端口 curl）见 packaging 子技能的 Verify。
 
-## 平台与分发（按需）
+## 常见坑（开发相关）
 
-| 需求       | 做法                                                                               |
-| ---------- | ---------------------------------------------------------------------------------- |
-| 跨平台构建 | `--target <triple>` 或 `--all-targets`（无需本地工具链）                           |
-| 图标       | `desktop.app.icons.{macos,windows,linux}`（`.icns`/`.ico`/`.png`，相对 deno.json） |
-| macOS 签名 | `desktop.macos.codesignIdentity`（`"-"` 为 ad-hoc；缺省也会 ad-hoc 签名）          |
-| 深链       | `desktop.app.deepLinks: ["myapp"]`（注册到系统；处理回调能力后续版本提供）         |
-| 自动更新   | `desktop.release.baseUrl` + `Deno.autoUpdate()`（bsdiff 补丁 + 回滚）              |
-| 错误上报   | `desktop.errorReporting.url`（未设则只弹原生提示）                                 |
-| 原生能力   | `Deno.BrowserWindow`、菜单、托盘、对话框、通知、`bindings.<name>()` 进程内调用     |
-| 调试       | `--inspect*` 双端调试；统一 DevTools 目前仅 CEF 后端可用                           |
-
-体积策略：优先 webview 后端 + `--exclude-unused-npm`；必要时 `--compress`（xz
-默认，zstd 更小但需系统有 zstd）。 服务端产物会外部化 npm
-依赖，若体积异常先检查是否有不必要的服务端依赖。
+- 探针没应答 → 每次启动白等 15 秒；`dev:desktop` 日志里能看到
+  `Server not ready after 15s`。
+- `--hmr` 在显式入口下主要重载 Deno 侧代码，**不会**把 Vite 的客户端 HMR 带进
+  webview——要客户端 HMR 就用 `dev:desktop`。
+- 桌面进程继承系统环境，**不会自动读 `.env`**（与 `typed-env` 组合时见其技能）。
+- dev SSR 依赖模板 `vite.config.ts` 里的 `fileRoutes({ codeSplitting: false })`
+  （见 `docs/development.md` §3.1）：默认 lazy 路由在 dev 下会命中 Solid 的
+  asset-manifest 守卫（`lazy() called … but no asset manifest is set`），整页
+  SSR 挂掉——桌面 dev 用的正是 dev server，这条是前置条件。
 
 ## 组合注意
 
-- 依赖 `deno task build`（技能内任务已串联）；与其它技能无硬依赖。
-- 开发循环用 `deno task dev`（浏览器 + Vite HMR）；`deno desktop`
-  用于验收与分发。 显式入口下 `--hmr` 主要重载 Deno 侧代码，不会把 Vite 的 HMR
-  带进内嵌 webview。
-- 环境变量：桌面进程继承系统环境，不会自动读 `.env`；`typed-env`
-  的服务端变量需由运行环境注入 （编译期权限已把 `--allow-env` 烘进二进制）。
-- CI：桌面打包依赖平台目标与后端下载，建议本地或按平台矩阵单独跑，不必并入
-  `skills/ci` 的门禁。
+- 依赖 `deno task build`（任务里已串联）；与其它技能无硬依赖。
+- 与 `skills/typed-env` 组合：桌面任务按需把 `--env-file=.env` 交给 `deno run`；
+  编译进二进制的变量仍需运行环境提供。
+- 与 `skills/testing` 组合：`start.ts` 里的纯函数（端口解析、尺寸 clamp、菜单
+  构造）适合用 server project 直接单测。
+- 打包分发见 [`packaging.md`](./packaging.md)；打印见 [`printing.md`](./printing.md)。
+
+## 回滚
+
+- 删除 `start.ts`，还原 `deno.json`（tasks / desktop 配置 / imports）、
+  `.gitignore` 与文档引用；如需恢复 Node 宿主，按 git 历史找回 `server.js`。
 
 ## 记录能力
 

@@ -16,7 +16,7 @@ description: Use when starting a task in this project and unsure which skill or 
 | 加格式化门禁、统一风格、要一条 `deno task verify`                         | `skills/project-hygiene/SKILL.md`                              | 可选能力，先看其 sentinel 是否已装              |
 | 装测试基建 / 写测试                                                       | `skills/testing/SKILL.md`                                      | Vitest 双 project（client jsdom + server node） |
 | 加环境变量（类型、校验、防泄漏）                                          | `skills/typed-env/SKILL.md`                                    | `env.ts` + `virtual:env/*`                      |
-| 打包桌面应用（.app / .dmg / .msi / .AppImage、跨平台构建）                | `skills/deno-desktop/SKILL.md`                                 | Deno ≥ 2.9；`Deno.serve` 入口 + 构建产物内嵌    |
+| 开发 / 打包桌面应用（dev 模式、窗口/打印、.app / .dmg / .msi / .AppImage） | `skills/deno-desktop/SKILL.md`（+ 同目录 `packaging.md` / `printing.md`） | 技能集：Deno ≥ 2.9；统一 `start.ts` 宿主        |
 | 加 GitHub Actions CI                                                      | `skills/ci/SKILL.md`                                           | 硬前置：已装 hygiene + testing                  |
 | 理解分层、请求怎么走、边界为什么这么划                                    | `docs/architecture.md`                                         | 含 `/posts` 全链路示例                          |
 | 查规则细节：Solid 2.0 反模式、路由数据 API、oRPC、Zod 4、Tailwind 4、Deno | `docs/development.md`                                          | 权威开发规范；按章节查阅                        |
@@ -31,6 +31,7 @@ grep -q '"verify"' deno.json && echo "hygiene: installed"   || echo "hygiene: no
 test -f vitest-setup.ts         && echo "testing: installed" || echo "testing: not installed"
 test -f env.ts                  && echo "typed-env: installed" || echo "typed-env: not installed"
 test -f .github/workflows/ci.yml && echo "ci: installed"      || echo "ci: not installed"
+test -f start.ts && grep -q '"prod:desktop"' deno.json && echo "desktop: installed" || echo "desktop: not installed"
 ```
 
 - `not installed` + 任务命中 → 读对应 SKILL 走 Apply 流程；装完记得在

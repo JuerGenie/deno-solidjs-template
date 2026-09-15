@@ -264,6 +264,13 @@ effect）；`undefined` 在 `merge`/setter 中是真实值。
 无默认导出的模块 `page: false`，handler 代码与其 import 不会进客户端包。只导出
 `GET` 时自动补 `HEAD`。
 
+路由引用是 **eager** 的：`vite.config.ts` 用
+`fileRoutes({ codeSplitting: false })`。dev 的资产解析器是异步的，lazy
+路由会挂在 Solid 的 asset-manifest 守卫上（`lazy() called … but no asset manifest
+is set`），让 `deno task dev` 下每个页面都无法 SSR。页面模块很小，单个客户端
+chunk 的代价低于 dev 崩溃；重依赖（如 pdf.js）仍按动态 import 懒加载。要恢复按
+路由分包，得先确认该守卫在 dev 下已被修复。
+
 ### 3.2 route 导出与 preload
 
 ```tsx
