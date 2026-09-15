@@ -13,12 +13,13 @@ description: Use when working in this Deno + SolidJS 2.0 + oRPC + Tailwind v4 fu
 ## 3 分钟上手
 
 ```sh
-deno task dev      # Vite 开发服务器（SSR + HMR），端口 3000
-deno task check    # 类型检查
-deno task lint     # lint
-deno task build    # dist/client（静态资源）+ dist/server（handleRequest）
-deno task start    # server.js 托管生产产物
-deno task serve    # vite preview（不写宿主验收生产）
+deno task dev          # start.ts --dev：Vite 开发服务器（SSR + HMR），端口 3000
+deno task check        # 类型检查（src + start.ts）
+deno task lint         # lint
+deno task build        # dist/client（静态资源）+ dist/server（handleRequest）
+deno task start        # start.ts 托管生产产物
+deno task dev:desktop  # 桌面容器接 Vite dev server（客户端 HMR）
+deno task serve        # vite preview（不写宿主验收生产）
 ```
 
 依赖只由 `deno.json` 的 `imports` 管理（无
@@ -237,7 +238,7 @@ function Tag(props: { selected: boolean; children: string }) {
   重新生成（新增路由后需再跑一次 vite）。
 - oRPC 端点 404：确认 `prefix` 与 `src/protocol/transport.ts` 的 `rpcPath`
   一致。
-- 生产宿主行为：`server.js` 先静态资源后 `handleRequest`；`/` 不落静态分支。
+- 生产宿主行为：`start.ts` 先静态资源（`dist/client`）后 `handleRequest`。
 
 ## 验证
 

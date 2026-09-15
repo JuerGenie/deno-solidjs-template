@@ -22,12 +22,13 @@ deno install
 deno task dev        # http://localhost:3000
 ```
 
-生产：
+生产 / 桌面：
 
 ```sh
-deno task build      # dist/client + dist/server
-deno task start      # server.js 托管（Node adapter，兼容 deno desktop）
-deno task serve      # 或 vite preview，不写宿主验收生产
+deno task build        # dist/client + dist/server
+deno task start        # start.ts 托管（静态资源 + handleRequest）
+deno task serve        # 或 vite preview，不写宿主验收生产
+deno task dev:desktop  # 桌面容器接 Vite dev-server（客户端 HMR）
 ```
 
 ## 目录
@@ -42,7 +43,7 @@ src/
   router.ts      # 文件路由 → createRouter
   App.tsx        # 应用根（Router + Loading / Errored 边界）
   Document.tsx   # 文档壳（html/head/HydrationScript）
-server.js        # 生产宿主：静态资源 + handleRequest
+start.ts         # 统一宿主：dev 编程式起 Vite；生产托管构建产物（含 deno desktop）
 docs/            # architecture.md（架构）· development.md（开发规范）
 skills/          # 可选能力模块（测试 / 环境变量 / CI / 工程卫生）
 ```

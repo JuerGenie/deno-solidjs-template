@@ -8,7 +8,7 @@ export default defineConfig({
     // Turnkey SSR: no index.html and no entry files — the plugin generates the
     // entries around src/App.tsx, wrapped in src/Document.tsx. `vite build`
     // emits client assets to dist/client and the request handler to
-    // dist/server; `deno task start` serves both with server.js.
+    // dist/server; `deno task start` serves both with start.ts.
     solid({
       start: {
         // Fetch-style chain fronting every request: dispatches API routes

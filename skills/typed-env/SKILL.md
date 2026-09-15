@@ -84,7 +84,7 @@ env.SESSION_SECRET; // 启动时校验后的 process.env
 
 ```jsonc
 "tasks": {
-  "start": "deno run --env-file=.env --allow-net --allow-read --allow-env server.js"
+  "start": "deno run --env-file=.env --allow-net --allow-read --allow-write --allow-env --allow-sys start.ts"
 }
 ```
 

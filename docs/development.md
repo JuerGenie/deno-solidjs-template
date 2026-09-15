@@ -549,10 +549,9 @@ const tone = { error: "bg-red-500", ok: "bg-emerald-500" };
   specifier）里，`deno add npm:pkg@1.2.3` 会自动更新 `deno.lock`；
   提交锁文件。beta/RC 依赖精确锁版本（oRPC、Solid
   系），升级时客户端与服务端同步升。
-- 任务：`deno task dev/build/start/serve/check/lint`；工具脚本放 `tools/`，以
-  `deno run --allow-...` 暴露为任务。
-- 类型检查覆盖 `src`（`deno task check`）；`server.js` 是纯 JS
-  宿主，不在检查范围。
+- 任务：`deno task dev/build/start/dev:desktop/serve/check/lint`；工具脚本放
+  `tools/`，以 `deno run --allow-...` 暴露为任务。
+- 类型检查覆盖 `src` 与 `start.ts`（`deno task check`）。
 - 环境变量：
   - 服务端：`Deno.env.get(...)` / `process.env`，启动任务可加
     `--env-file=.env`。

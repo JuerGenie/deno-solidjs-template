@@ -63,13 +63,13 @@ flowchart LR
 | `src/App.tsx`               | 应用根：`Router` + 全局 `<Loading>` / `<Errored>` 边界                                    | 是                                            |
 | `src/Document.tsx`          | 文档壳（新的 index.html）：`<html>` / `<head>` / `<HydrationScript>`                      | 服务端渲染                                    |
 | `src/router.ts`             | 路由实例：`virtual:file-routes` → `createRouter`                                          | 是                                            |
-| `server.js`                 | 生产宿主：静态资源 + `handleRequest`（Node adapter）                                      | 运行时文件                                    |
+| `start.ts`                  | 统一宿主：dev 程序内起 Vite；生产托管 `dist/client` + `handleRequest`（浏览器与桌面通用） | 运行时文件                                    |
 
 ## 2. 一次请求的旅程
 
-**页面 SSR**：`server.js` 先尝试 `dist/client`
+**页面 SSR**：`start.ts` 先尝试 `dist/client`
 静态资源；未命中则把请求交给构建产物 `dist/server/server.js` 的
-`handleRequest(request, { event: { nativeEvent: req } })`。中间件链
+`handleRequest(request, { event: { nativeEvent: info } })`。中间件链
 （`src/middleware.ts`）先派发 API 路由；未匹配则进入页面渲染：路由 `preload`
 中的 `query()` 在服务端直接调用 server function → `createRouterClient` →
 契约实现，数据随流式 HTML 一起下发，客户端 hydration 接管。
@@ -110,15 +110,18 @@ flowchart LR
 
 ## 4. 构建与生产宿主
 
-- `deno task dev`：Vite 开发服务器（HMR + 流式 SSR + `/_server` 端点；dev
-  中间件即生产 handler）。
+- `deno task dev`：`start.ts --dev` 程序内启动 Vite（HMR + 流式 SSR + `/_server`
+  端点；dev 中间件即生产 handler）。
 - `deno task build`：产出 `dist/client`（静态资源 + manifest）与
   `dist/server/server.js`（`handleRequest`）。
-- `deno task start`：`server.js` 托管以上两者——静态资源命中直接返回，其余交给
+- `deno task start`：`start.ts` 托管以上两者——静态资源命中直接返回，其余交给
   `handleRequest`。
+- `deno task dev:desktop` / `deno desktop start.ts`：同一入口跑桌面容器（Vite
+  dev server / 生产产物），运行时通过 `DENO_SERVE_ADDRESS` 指定端口（见
+  `skills/deno-desktop/`）。
 - `deno task serve`：`vite preview`，不写宿主也能本地验收生产产物。
 - `handleRequest` 是平台无关的 `Request -> Response`；迁移到 Deno Deploy /
-  Workers / `deno serve` 时可直接替换 `server.js` 这一层适配。
+  Workers / `deno serve` 时可直接替换 `start.ts` 这一层适配。
 
 ## 5. 贯穿示例：`/posts`
 

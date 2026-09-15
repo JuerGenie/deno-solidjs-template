@@ -10,8 +10,7 @@ description: Use when a Deno project needs formatting/lint gates, a single verif
 
 ## 何时使用
 
-- 需要 `deno fmt` 能稳定通过（当前 `server.js` 与生成的 `file-routes.d.ts`
-  会失败）。
+- 需要 `deno fmt` 能稳定通过（当前生成的 `file-routes.d.ts` 会失败）。
 - 需要一条命令代表"改完了，验一遍"：`deno task verify`。
 - 准备启用 `skills/ci`（它依赖本技能提供的 `verify` 任务）。
 
@@ -41,7 +40,7 @@ deno.json 的 `tasks` 里已有 `verify` → 已安装，跳过 Apply，直接�
 }
 ```
 
-说明：`deno fmt` 会把 `server.js` 的引号统一为双引号（Deno
+说明：`deno fmt` 会把既有文件的引号统一为双引号（Deno
 默认风格），这是一次性归一化，不要为此加 `singleQuote` 配置。 `solid-env.d.ts`
 只在启用 `typed-env` 后存在，预先排除无害。
 

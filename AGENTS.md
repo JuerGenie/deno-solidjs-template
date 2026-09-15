@@ -14,11 +14,12 @@ materializes `node_modules` from the `imports` map in `deno.json` (locked by
 `deno.lock`).
 
 ```sh
-deno task dev      # Vite dev server (SSR + HMR), port 3000
-deno task build    # dist/client + dist/server/server.js
-deno task start    # production host: server.js (static + handleRequest)
-deno task serve    # vite preview (no host file)
-deno task check    # deno check src
+deno task dev          # programmatic Vite dev server (SSR + HMR), port 3000
+deno task build        # dist/client + dist/server/server.js
+deno task start        # production host: start.ts (static + handleRequest)
+deno task dev:desktop  # desktop app served by the Vite dev server (client HMR)
+deno task serve        # vite preview (no host file)
+deno task check        # deno check src start.ts
 deno task lint
 ```
 
@@ -40,7 +41,7 @@ applied.
 | `src/middleware.ts`         | Fetch-style middleware chain fronting every request.                            |
 | `src/App.tsx`               | App root: `Router` + global `<Loading>` / `<Errored>` boundaries.               |
 | `src/Document.tsx`          | The document shell (`<html>`/`<head>`/`<HydrationScript>`).                     |
-| `server.js`                 | Production host adapter (static assets + built `handleRequest`).                |
+| `start.ts`                  | Unified host: dev (Vite programmatic) + production (static + `handleRequest`).  |
 | `docs/`                     | `architecture.md` (layers/data flow) · `development.md` (dev spec).             |
 | `skills/`                   | Opt-in capability modules. Index: `skills/README.md`.                           |
 
@@ -89,7 +90,7 @@ Composition rules and the apply protocol live in `skills/README.md`.
 
 ## Enabled capabilities
 
-- (none — append `- <skill> (<date>)` after applying a skill)
+- deno-desktop (2026-09-15)
 
 ## Versioned skills (in node_modules — read on demand)
 

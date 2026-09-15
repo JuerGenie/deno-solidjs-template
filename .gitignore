@@ -2,6 +2,9 @@
 dist
 .tmp
 
+# Desktop build output
+dist-desktop
+
 # Dependencies
 /node_modules
 
