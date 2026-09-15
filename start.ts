@@ -27,46 +27,13 @@ interface RequestHandler {
   ): Promise<Response>;
 }
 
-// --- `deno desktop` runtime APIs (not in the standard Deno types) ------------
-type MenuEntry =
-  | {
-    item: {
-      label: string;
-      id?: string;
-      accelerator?: string;
-      enabled: boolean;
-    };
-  }
-  | { submenu: { label: string; items: MenuEntry[] } }
-  | { role: { role: string } }
-  | "separator";
-
-interface ScreenBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface DesktopWindow {
-  getSize(): [number, number];
-  setSize(width: number, height: number): void;
-  setPosition(x: number, y: number): void;
-  executeJs(code: string): Promise<{ value?: ScreenBounds }>;
-  setApplicationMenu(items: MenuEntry[]): void;
-  addEventListener(type: "close" | "resize", listener: () => void): void;
-}
-
-interface DesktopDeno {
-  BrowserWindow?: new (
-    options?: { title?: string; width?: number; height?: number },
-  ) => DesktopWindow;
-}
+// Desktop runtime types (`Deno.BrowserWindow`, `Deno.MenuItem`, …) come from
+// the `deno.desktop` lib enabled in deno.json's `compilerOptions.lib`.
 
 // Roles give the platform-native label, accelerator and behavior; the first
 // submenu becomes the macOS application menu. Without this the window has no
 // Cmd+Q / Cmd+W handling (and the Edit roles provide clipboard shortcuts).
-const APPLICATION_MENU: MenuEntry[] = [
+const APPLICATION_MENU: Deno.MenuItem[] = [
   {
     submenu: { label: APP_NAME, items: [{ role: { role: "quit" } }] },
   },
@@ -97,7 +64,7 @@ const APPLICATION_MENU: MenuEntry[] = [
 
 // There is no minimum-size option, so a size below the floor is snapped back
 // on every resize (the follow-up setSize settles immediately).
-function clampToMinSize(window: DesktopWindow): void {
+function clampToMinSize(window: Deno.BrowserWindow): void {
   const [width, height] = window.getSize();
   const clampedWidth = Math.max(width, WINDOW_MIN_SIZE.width);
   const clampedHeight = Math.max(height, WINDOW_MIN_SIZE.height);
@@ -108,12 +75,16 @@ function clampToMinSize(window: DesktopWindow): void {
 
 // Centering needs the renderer's screen work area (no host-side screen API),
 // and the webview is not ready right away — retry until executeJs answers.
-async function centerWindow(window: DesktopWindow, attempt = 0): Promise<void> {
+async function centerWindow(
+  window: Deno.BrowserWindow,
+  attempt = 0,
+): Promise<void> {
   try {
-    const result = await window.executeJs(
+    // `executeJs` resolves the script's value directly (not an envelope), so
+    // narrow the untyped `BrowserWindowValue` to the object we asked for.
+    const bounds = await window.executeJs(
       "({ x: screen.availLeft, y: screen.availTop, width: screen.availWidth, height: screen.availHeight })",
-    );
-    const bounds = result?.value;
+    ) as { x: number; y: number; width: number; height: number } | null;
     if (!bounds) throw new Error("no screen bounds");
     const [width, height] = window.getSize();
     window.setPosition(
@@ -131,9 +102,9 @@ async function centerWindow(window: DesktopWindow, attempt = 0): Promise<void> {
 // does not stop the runtime while Deno.serve is alive, so exit explicitly —
 // that is what makes the traffic light, Cmd+W and Cmd+Q actually quit.
 function setupDesktopWindow(): void {
-  const api = Deno as unknown as DesktopDeno;
-  if (typeof api.BrowserWindow !== "function") return;
-  const window = new api.BrowserWindow({ title: APP_NAME, ...WINDOW_SIZE });
+  // Browser dev runs this same file without the desktop runtime.
+  if (typeof Deno.BrowserWindow !== "function") return;
+  const window = new Deno.BrowserWindow({ title: APP_NAME, ...WINDOW_SIZE });
   window.setApplicationMenu(APPLICATION_MENU);
   window.addEventListener("resize", () => clampToMinSize(window));
   window.addEventListener("close", () => {

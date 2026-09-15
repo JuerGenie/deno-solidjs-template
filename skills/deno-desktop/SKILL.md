@@ -1,6 +1,6 @@
 ---
 name: deno-desktop
-description: Use when developing this Deno + Solid app as a desktop application with `deno desktop` — unifying browser dev / desktop dev / production behind one `start.ts` host, running the desktop shell against the Vite dev server, window menu/close/quit/geometry behaviour, permissions and app-data placement. Packaging lives in `packaging.md`, printing in `printing.md` inside this skill folder. Triggers include deno desktop, desktop app, start.ts, BrowserWindow, desktop dev, DENO_SERVE_ADDRESS, CEF backend.
+description: Use when developing this Deno + Solid app as a desktop application with `deno desktop` — unifying browser dev / desktop dev / production behind one `start.ts` host, running the desktop shell against the Vite dev server, window menu/close/quit/geometry behaviour, permissions and app-data placement. Packaging lives in `packaging.md`, printing in `printing.md` inside this skill folder. Triggers include deno desktop, deno.desktop lib, desktop app, start.ts, BrowserWindow, desktop dev, DENO_SERVE_ADDRESS, CEF backend.
 ---
 
 # Deno Desktop：桌面开发模式（技能集入口）
@@ -47,8 +47,10 @@ description: Use when developing this Deno + Solid app as a desktop application 
   15 秒（日志 `Server not ready after 15s, navigating anyway`）。dev 中间件先应答它。
 - **laufey 没有宿主侧屏幕 API**：窗口居中要 `executeJs` 读 webview 的
   `screen.avail*`（打印另见 printing 子技能）。
-- Deno desktop 的运行时 API（`BrowserWindow`、`MenuItem`）**不在标准 deno types
-  里**，在 start.ts 里自行声明最小类型。
+- Deno desktop 的运行时 API 由 **`deno.desktop` lib** 提供：在 `deno.json` 的
+  `compilerOptions.lib` 里加上 `"deno.desktop"`，`Deno.BrowserWindow`、
+  `Deno.MenuItem`、`Deno.BrowserWindowOptions` 等类型直接可用，不要在 start.ts
+  里手写声明。
 - GUI 模式下关闭窗口不会结束进程（`Deno.serve` 让事件循环活着），必须自己
   `Deno.exit(0)`；没有应用菜单就没有 Cmd+Q / Cmd+W / 剪贴板快捷键。
 
@@ -92,46 +94,13 @@ interface RequestHandler {
   ): Promise<Response>;
 }
 
-// --- `deno desktop` runtime APIs (not in the standard Deno types) ------------
-type MenuEntry =
-  | {
-    item: {
-      label: string;
-      id?: string;
-      accelerator?: string;
-      enabled: boolean;
-    };
-  }
-  | { submenu: { label: string; items: MenuEntry[] } }
-  | { role: { role: string } }
-  | "separator";
-
-interface ScreenBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface DesktopWindow {
-  getSize(): [number, number];
-  setSize(width: number, height: number): void;
-  setPosition(x: number, y: number): void;
-  executeJs(code: string): Promise<{ value?: ScreenBounds }>;
-  setApplicationMenu(items: MenuEntry[]): void;
-  addEventListener(type: "close" | "resize", listener: () => void): void;
-}
-
-interface DesktopDeno {
-  BrowserWindow?: new (
-    options?: { title?: string; width?: number; height?: number },
-  ) => DesktopWindow;
-}
+// Desktop runtime types (`Deno.BrowserWindow`, `Deno.MenuItem`, …) come from
+// the `deno.desktop` lib enabled in deno.json's `compilerOptions.lib`.
 
 // Roles give the platform-native label, accelerator and behavior; the first
 // submenu becomes the macOS application menu. Without this the window has no
 // Cmd+Q / Cmd+W handling (and the Edit roles provide clipboard shortcuts).
-const APPLICATION_MENU: MenuEntry[] = [
+const APPLICATION_MENU: Deno.MenuItem[] = [
   {
     submenu: { label: APP_NAME, items: [{ role: { role: "quit" } }] },
   },
@@ -162,7 +131,7 @@ const APPLICATION_MENU: MenuEntry[] = [
 
 // There is no minimum-size option, so a size below the floor is snapped back
 // on every resize (the follow-up setSize settles immediately).
-function clampToMinSize(window: DesktopWindow): void {
+function clampToMinSize(window: Deno.BrowserWindow): void {
   const [width, height] = window.getSize();
   const clampedWidth = Math.max(width, WINDOW_MIN_SIZE.width);
   const clampedHeight = Math.max(height, WINDOW_MIN_SIZE.height);
@@ -173,12 +142,16 @@ function clampToMinSize(window: DesktopWindow): void {
 
 // Centering needs the renderer's screen work area (no host-side screen API),
 // and the webview is not ready right away — retry until executeJs answers.
-async function centerWindow(window: DesktopWindow, attempt = 0): Promise<void> {
+async function centerWindow(
+  window: Deno.BrowserWindow,
+  attempt = 0,
+): Promise<void> {
   try {
-    const result = await window.executeJs(
+    // `executeJs` resolves the script's value directly (not an envelope), so
+    // narrow the untyped `BrowserWindowValue` to the object we asked for.
+    const bounds = await window.executeJs(
       "({ x: screen.availLeft, y: screen.availTop, width: screen.availWidth, height: screen.availHeight })",
-    );
-    const bounds = result?.value;
+    ) as { x: number; y: number; width: number; height: number } | null;
     if (!bounds) throw new Error("no screen bounds");
     const [width, height] = window.getSize();
     window.setPosition(
@@ -196,9 +169,9 @@ async function centerWindow(window: DesktopWindow, attempt = 0): Promise<void> {
 // does not stop the runtime while Deno.serve is alive, so exit explicitly —
 // that is what makes the traffic light, Cmd+W and Cmd+Q actually quit.
 function setupDesktopWindow(): void {
-  const api = Deno as unknown as DesktopDeno;
-  if (typeof api.BrowserWindow !== "function") return;
-  const window = new api.BrowserWindow({ title: APP_NAME, ...WINDOW_SIZE });
+  // Browser dev runs this same file without the desktop runtime.
+  if (typeof Deno.BrowserWindow !== "function") return;
+  const window = new Deno.BrowserWindow({ title: APP_NAME, ...WINDOW_SIZE });
   window.setApplicationMenu(APPLICATION_MENU);
   window.addEventListener("resize", () => clampToMinSize(window));
   window.addEventListener("close", () => {
@@ -307,6 +280,10 @@ if (IS_DEV) {
 
 ```jsonc
 {
+  "compilerOptions": {
+    // 在既有 lib 列表里追加；桌面运行时类型（BrowserWindow/MenuItem 等）由它提供
+    "lib": ["deno.window", "dom", "dom.iterable", "deno.desktop"]
+  },
   "desktop": {
     "app": {
       "name": "Deno Solid App",
@@ -332,6 +309,9 @@ if (IS_DEV) {
 - **`--allow-sys`**：`node:process` 的部分 API（如 `process.umask`）需要它；服务端
   依赖里只要有 exceljs 这类 Node 生态包，导入期就可能触发。`--allow-write` 给用户
   数据目录。dev 任务直接用 `-A` 省心。
+- `compilerOptions.lib` 加 `"deno.desktop"`：`Deno.BrowserWindow`、
+  `Deno.MenuItem`、`Deno.BrowserWindowOptions` 等桌面运行时类型直接可用；
+  配合覆盖 `start.ts` 的 `check` 任务获得完整类型检查，不要手写这些类型。
 - `check` / `lint` 记得带上 `start.ts`（模板默认只覆盖 `src`）：
   `"check": "deno check src start.ts"`、`"lint": "deno lint src start.ts"`。
 - `prod:desktop*` 任务由 packaging 子技能追加。
@@ -361,9 +341,9 @@ dist-desktop
 - **菜单 → 快捷键**：`setApplicationMenu` 用 `role` 项拿系统原生标签与快捷键
   （`quit`/`close`/`minimize`/`undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`）；
   macOS 第一个 submenu 是应用菜单。
-- **尺寸/居中/最小尺寸**：构造参数只有 `width/height/x/y`，没有 `center`/`minWidth`；
-  居中读 `screen.avail*` 再 `setPosition`（`executeJs` 返回 `{ ok, value }` 信封），
-  最小尺寸靠 `resize` 事件里 clamp。
+- **尺寸/居中/最小尺寸**：`BrowserWindowOptions` 没有 `center`/`minWidth`；居中读
+  `screen.avail*` 再 `setPosition`（`executeJs` 直接 resolve 脚本求值结果，用 `as`
+  收窄，**不是** `{ ok, value }` 信封），最小尺寸靠 `resize` 事件里 clamp。
 - **退出**：`close` 事件里 `Deno.exit(0)`，否则窗口关了进程还在。
 - **数据目录**：打包后的 `.app` 内部是只读的，用户数据（上传的 PDF/表格等）放应用
   数据目录（macOS `~/Library/Application Support/<App>/`），并提供
