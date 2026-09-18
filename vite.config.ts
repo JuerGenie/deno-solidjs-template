@@ -1,10 +1,15 @@
 import { fileRoutes } from "filesystem-routing/vite";
 import { defineConfig } from "vite";
+import deno from "@deno/vite-plugin";
 import solid from "@solidjs/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [
+    // Resolves Deno-style specifiers (deno.json import-map aliases such as
+    // "#/", plus npm:/jsr:/http(s):) inside the Vite module graph. Note: it
+    // cannot apply to vite.config.ts itself.
+    deno(),
     // Turnkey SSR: no index.html and no entry files — the plugin generates the
     // entries around src/App.tsx, wrapped in src/Document.tsx. `vite build`
     // emits client assets to dist/client and the request handler to

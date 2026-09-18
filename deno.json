@@ -19,6 +19,8 @@
     "types": ["vite/client"]
   },
   "imports": {
+    "#/": "./src/",
+    "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
     "@orpc/contract": "npm:@orpc/contract@2.0.0-beta.35",
     "@orpc/server": "npm:@orpc/server@2.0.0-beta.35",
     "@solidjs/meta": "npm:@solidjs/meta@^1.0.0-next.2",
