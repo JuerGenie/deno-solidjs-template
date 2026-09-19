@@ -38,6 +38,7 @@
   "tasks": {
     "dev": "deno run -A start.ts --dev",
     "build": "vite build",
+    "build:desktop": "deno task build && deno desktop --output ./dist-desktop/DenoSolid --include dist --allow-net --allow-read --allow-write --allow-env --allow-sys --exclude-unused-npm start.ts",
     "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys start.ts",
     "dev:desktop": "DESKTOP_DEV=1 deno desktop -A --hmr --exclude-unused-npm start.ts",
     "serve": "vite preview",
